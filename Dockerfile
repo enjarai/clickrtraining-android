@@ -1,4 +1,4 @@
-FROM rust:1.86-alpine
+FROM rust:1.86
 
 WORKDIR /usr/src/myapp
 COPY . .
