@@ -1,0 +1,14 @@
+[package]
+name = "clickrtraining"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-files = "0.6.6"
+actix-web = "4.10.2"
+actix-ws = "0.3.0"
+env_logger = "0.11.8"
+log = "0.4.27"
+multimap = "0.10.0"
+once_cell = "1.21.3"
+tokio = "1.44.1"
