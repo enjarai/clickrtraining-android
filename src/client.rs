@@ -32,7 +32,7 @@ pub async fn start(args: ClientArgs) -> Result<()> {
                                     Ok("c") => {
                                         info!("Click!");
 
-                                        let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
+                                        let (_stream, _stream_handle) = rodio::OutputStream::try_default()?;
                                         let source = Decoder::new(Cursor::new(include_bytes!("../static/sound.ogg")))?;
 
                                         sink.append(source);

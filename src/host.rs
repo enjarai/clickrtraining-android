@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, net::IpAddr, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
 use actix_files::Files;
@@ -6,11 +6,14 @@ use actix_web::{get, web::{self, Payload}, App, HttpRequest, HttpResponse, HttpS
 use actix_ws::Session;
 use log::info;
 use once_cell::sync::Lazy;
+use rand::{rngs::StdRng, seq::IndexedRandom, SeedableRng};
+use random_word::Lang;
 use tokio::{spawn, sync::Mutex, time::{sleep, timeout}};
 
 use crate::ServerArgs;
 
 static CLIENTS: Lazy<Mutex<HashMap<String, Vec<Session>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static WORDS: Lazy<&'static [&'static str]> = Lazy::new(|| random_word::all_len(8, Lang::En).unwrap());
 
 #[get("/api/{id}/listen")]
 async fn listen(req: HttpRequest, stream: Payload, id: web::Path<String>) -> Result<HttpResponse, actix_web::Error> {
@@ -96,3 +99,17 @@ async fn send_or_drop(sessions: &mut Vec<Session>, msg: &str) {
 
     sessions.retain(|_| do_retain.pop().unwrap());
 }
+
+// fn get_word(req: &HttpRequest) -> &'static str {
+//     let address = match req.headers().get("X-Forwarded-For") {
+//         Some(address) => address.to_str(),
+//         None => req.peer_addr().map::<[u8], _>(|a| match a.ip() {
+//             IpAddr::V4(ip) => ip.octets(),
+//             IpAddr::V6(ip) => ip.octets(),
+//         }).unwrap_or([0u8]),
+//     };
+
+//     let mut seed = [0u8; 32];
+
+//     WORDS.choose(&mut StdRng::from_seed(seed)).unwrap()
+// }
