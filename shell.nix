@@ -5,7 +5,7 @@ let
     alsa-lib
   ];
 in pkgs.mkShell {
-  name = "rust";
+  name = "clickrtraining";
 
   buildInputs = libs ++ (with pkgs; [
     cargo
