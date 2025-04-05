@@ -3,6 +3,7 @@ let
   pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/${nixpkgsVer}.tar.gz") { config = {}; overlays = []; };
   libs = with pkgs; [
     alsa-lib
+    openssl
   ];
 in pkgs.mkShell {
   name = "clickrtraining";

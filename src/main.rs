@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::{arg, command, Parser, Subcommand};
 use env_logger::Target;
 use log::LevelFilter;
+use url_builder::URLBuilder;
 
 mod host;
 mod client;
@@ -26,16 +27,18 @@ enum Command {
 struct ServerArgs {
     #[arg(short, long, help = "The address to listen on")]
     addr: String,
-    #[arg(short, long, default_value_t = 8098, help = "The port to listen on")]
+    #[arg(short, long, default_value_t = 443, help = "The port to listen on")]
     port: u16,
 }
 
 #[derive(clap::Args, Debug, Clone)]
 #[command(about = "Listen for clicks in a room", long_about = None)]
 struct ClientArgs {
+    #[arg(long, default_value = "wss", help = "The protocol to use when connecting to the host")]
+    protocol: String,
     #[arg(short, long, help = "The host address")]
     addr: String,
-    #[arg(short, long, default_value_t = 8098, help = "The host port")]
+    #[arg(short, long, default_value_t = 443, help = "The host port")]
     port: u16,
     #[arg(short, long, help = "The room identifier")]
     id: String,
@@ -46,9 +49,11 @@ struct ClientArgs {
 #[derive(clap::Args, Debug, Clone)]
 #[command(about = "Click a room", long_about = None)]
 struct ClickArgs {
+    #[arg(long, default_value = "https", help = "The protocol to use when connecting to the host")]
+    protocol: String,
     #[arg(short, long, help = "The host address")]
     addr: String,
-    #[arg(short, long, default_value_t = 8098, help = "The host port")]
+    #[arg(short, long, default_value_t = 443, help = "The host port")]
     port: u16,
     #[arg(short, long, help = "The room identifier")]
     id: String,
@@ -66,11 +71,25 @@ async fn main() -> Result<()> {
         Command::Listen(args) => client::start(args).await,
         Command::Click(args) => {
             let client = awc::Client::default();
-            client.get(format!("http://{}:{}/api/{}/click", args.addr, args.port, args.id))
+            client.get(build_room_url(args.protocol.as_str(), args.addr.as_str(), args.port, args.id.as_str(), "click"))
                 .send()
                 .await
                 .map(|_e| ())
                 .map_err(|e| anyhow!("Failed to ping room: {}", e))
         },
     }
+}
+
+fn build_room_url(protocol: &str, address: &str, port: u16, room_id: &str, action: &str) -> String {
+    let mut ub = URLBuilder::new();
+
+    ub
+        .set_protocol(protocol)
+        .set_host(address)
+        .set_port(port)
+        .add_route("api")
+        .add_route(room_id)
+        .add_route(action);
+
+    ub.build()
 }

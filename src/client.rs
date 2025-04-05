@@ -2,20 +2,21 @@ use core::str;
 use std::{io::Cursor, time::Duration};
 
 use anyhow::Result;
-use awc::Client;
 use awc::ws::Frame::Text;
 use futures::StreamExt;
 use log::{info, warn};
 use rodio::Decoder;
 use tokio::time::{sleep, timeout};
 
-use crate::ClientArgs;
+use crate::{build_room_url, ClientArgs};
 
 pub async fn start(args: ClientArgs) -> Result<()> {
-    let client = Client::default();
+    let client = awc::Client::builder()
+        .max_http_version(awc::http::Version::HTTP_11)
+        .finish();
 
     loop {
-        match client.ws(format!("ws://{}:{}/api/{}/listen", args.addr, args.port, args.id)).connect().await {
+        match client.ws(build_room_url(args.protocol.as_str(), args.addr.as_str(), args.port, args.id.as_str(), "listen")).connect().await {
             Ok((res, mut ws)) => {
                 info!("Connected! HTTP response: {res:?}");
 
