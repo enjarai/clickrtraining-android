@@ -1,95 +1,95 @@
-use std::{collections::HashMap, time::Duration};
-
-use actix_files::Files;
-use actix_web::{get, web::{self, Payload}, App, HttpRequest, HttpResponse, HttpServer};
-use actix_ws::Session;
+use anyhow::{anyhow, Result};
+use clap::{arg, command, Parser, Subcommand};
 use env_logger::Target;
-use log::{info, LevelFilter};
-use tokio::{spawn, sync::Mutex, time::{sleep, timeout}};
-use once_cell::sync::Lazy;
+use log::LevelFilter;
+use url_builder::URLBuilder;
 
-static CLIENTS: Lazy<Mutex<HashMap<String, Vec<Session>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+mod host;
+mod client;
 
-#[get("/api/{id}/listen")]
-async fn listen(req: HttpRequest, stream: Payload, id: web::Path<String>) -> Result<HttpResponse, actix_web::Error> {
-    if id.len() > 64 {
-        return Ok(HttpResponse::BadRequest().finish())
-    }
-    
-    let (res, session, _stream) = actix_ws::handle(&req, stream)?;
-
-    CLIENTS.lock().await
-        .entry(id.to_string())
-        .or_default()
-        .push(session);
-
-    info!("A client has connected on id {}.", id);
-
-    Ok(res)
+#[derive(Debug, Parser)]
+#[command(name = "clickrtraining")]
+#[command(about = "Host and client for clickrtraining", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
 }
 
-#[get("/api/{id}/click")]
-async fn click(id: web::Path<String>) -> Result<HttpResponse, actix_web::Error> {
-    if let Some(sessions) = CLIENTS.lock().await.get_mut(&id.to_string()) {
-        send_or_drop(sessions, "c").await;
+#[derive(Debug, Subcommand)]
+enum Command {
+    Host(ServerArgs),
+    Listen(ClientArgs),
+    Click(ClickArgs),
+}
 
-        Ok(HttpResponse::Ok().finish())
-    } else {
-        Ok(HttpResponse::NotFound().finish())
-    }
+#[derive(clap::Args, Debug, Clone)]
+#[command(about = "Host a clickrtraining instance", long_about = None)]
+struct ServerArgs {
+    #[arg(short, long, help = "The address to listen on")]
+    addr: String,
+    #[arg(short, long, default_value_t = 443, help = "The port to listen on")]
+    port: u16,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+#[command(about = "Listen for clicks in a room", long_about = None)]
+struct ClientArgs {
+    #[arg(long, default_value = "wss", help = "The protocol to use when connecting to the host")]
+    protocol: String,
+    #[arg(short, long, help = "The host address")]
+    addr: String,
+    #[arg(short, long, default_value_t = 443, help = "The host port")]
+    port: u16,
+    #[arg(short, long, help = "The room identifier")]
+    id: String,
+    #[arg(short, long, default_value_t = 1.0, help = "The volume at which to play the clicks")]
+    volume: f32,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+#[command(about = "Click a room", long_about = None)]
+struct ClickArgs {
+    #[arg(long, default_value = "https", help = "The protocol to use when connecting to the host")]
+    protocol: String,
+    #[arg(short, long, help = "The host address")]
+    addr: String,
+    #[arg(short, long, default_value_t = 443, help = "The host port")]
+    port: u16,
+    #[arg(short, long, help = "The room identifier")]
+    id: String,
 }
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<()> {
     env_logger::Builder::from_default_env()
         .target(Target::Stdout)
         .filter_level(LevelFilter::Info)
         .init();
 
-    spawn(heartbeat());
-
-    HttpServer::new(|| App::new()
-            .service(listen)
-            .service(click)
-            .service(Files::new("/", "./static").index_file("index.html"))
-        )
-        .bind(("0.0.0.0", 8098))?
-        .run()
-        .await
-}
-
-async fn heartbeat() {
-    loop {
-        sleep(Duration::from_secs(10)).await;
-
-        let mut clients = CLIENTS.lock().await;
-
-        for (_, sessions) in clients.iter_mut() {
-            send_or_drop(sessions, "h").await;
-        }
-
-        clients.retain(|_, v| !v.is_empty());
+    match Cli::parse().command {
+        Command::Host(args) => host::start(args).await,
+        Command::Listen(args) => client::start(args).await,
+        Command::Click(args) => {
+            let client = awc::Client::default();
+            client.get(build_room_url(args.protocol.as_str(), args.addr.as_str(), args.port, args.id.as_str(), "click"))
+                .send()
+                .await
+                .map(|_e| ())
+                .map_err(|e| anyhow!("Failed to ping room: {}", e))
+        },
     }
 }
 
-async fn send_or_drop(sessions: &mut Vec<Session>, msg: &str) {
-    let mut do_retain = Vec::new();
+fn build_room_url(protocol: &str, address: &str, port: u16, room_id: &str, action: &str) -> String {
+    let mut ub = URLBuilder::new();
 
-    for session in sessions.iter_mut() {
-        match timeout(Duration::from_millis(500), session.text(msg)).await {
-            Ok(Ok(_)) => {
-                do_retain.push(true);
-            }
-            Ok(Err(e)) => {
-                info!("A client has disconnected: {e}");
-                do_retain.push(false);
-            }
-            Err(e) => {
-                info!("A client has timed out: {e}");
-                do_retain.push(false);
-            }
-        }
-    }
+    ub
+        .set_protocol(protocol)
+        .set_host(address)
+        .set_port(port)
+        .add_route("api")
+        .add_route(room_id)
+        .add_route(action);
 
-    sessions.retain(|_| do_retain.pop().unwrap());
+    ub.build()
 }
