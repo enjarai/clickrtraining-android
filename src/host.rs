@@ -1,46 +1,75 @@
-use std::{collections::HashMap, net::IpAddr, time::Duration};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+    net::IpAddr,
+    time::Duration,
+};
 
-use anyhow::{anyhow, Context, Result};
 use actix_files::Files;
-use actix_web::{get, web::{self, Payload}, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    get,
+    web::{self, Payload},
+    App, HttpRequest, HttpResponse, HttpServer, Responder,
+};
 use actix_ws::Session;
+use anyhow::{anyhow, Context, Result};
 use log::info;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, seq::IndexedRandom, SeedableRng};
 use random_word::Lang;
-use tokio::{spawn, sync::Mutex, time::{sleep, timeout}};
+use tokio::{
+    spawn,
+    sync::Mutex,
+    time::{sleep, timeout},
+};
 
 use crate::ServerArgs;
 
-static CLIENTS: Lazy<Mutex<HashMap<String, Vec<Session>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static WORDS: Lazy<&'static [&'static str]> = Lazy::new(|| random_word::all_len(8, Lang::En).unwrap());
+static CLIENTS: Lazy<Mutex<HashMap<String, Vec<Client>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static WORDS: Lazy<&'static [&'static str]> =
+    Lazy::new(|| random_word::all_len(8, Lang::En).unwrap());
+
+struct Client {
+    session: Session,
+    word: &'static str,
+}
 
 #[get("/api/{id}/listen")]
-async fn listen(req: HttpRequest, stream: Payload, id: web::Path<String>) -> Result<HttpResponse, actix_web::Error> {
+async fn listen(
+    req: HttpRequest,
+    stream: Payload,
+    id: web::Path<String>,
+) -> Result<HttpResponse, actix_web::Error> {
     if id.len() > 64 {
-        return Ok(HttpResponse::BadRequest().finish())
+        return Ok(HttpResponse::BadRequest().finish());
     }
 
     let (res, session, _stream) = actix_ws::handle(&req, stream)?;
+    let word = get_word(&req);
 
-    CLIENTS.lock().await
+    CLIENTS
+        .lock()
+        .await
         .entry(id.to_string())
         .or_default()
-        .push(session);
+        .push(Client { session, word });
 
-    info!("A client has connected to room \"{}\".", id);
+    info!("'{word}' has connected to room '{}'.", id);
 
     Ok(res)
 }
 
 #[get("/api/{id}/click")]
-async fn click(id: web::Path<String>) -> impl Responder {
+async fn click(req: HttpRequest, id: web::Path<String>) -> impl Responder {
     if id.len() > 64 {
-        return HttpResponse::BadRequest().finish()
+        return HttpResponse::BadRequest().finish();
     }
 
     if let Some(sessions) = CLIENTS.lock().await.get_mut(&id.to_string()) {
         send_or_drop(sessions, "c").await;
+
+        info!("'{}' clicked room '{id}'", get_word(&req));
 
         HttpResponse::Ok().finish()
     } else {
@@ -51,16 +80,20 @@ async fn click(id: web::Path<String>) -> impl Responder {
 pub async fn start(args: ServerArgs) -> Result<()> {
     spawn(heartbeat());
 
-    let server = HttpServer::new(|| App::new()
+    let server = HttpServer::new(|| {
+        App::new()
             .service(listen)
             .service(click)
             .service(Files::new("/", "./static").index_file("index.html"))
-        )
-        .bind((args.addr, args.port))
-        .context("Failed to bind address")?;
+    })
+    .bind((args.addr, args.port))
+    .context("Failed to bind address")?;
 
     info!("Server configured, running...");
-    server.run().await.map_err(|e| anyhow!("Failed to run server: {}", e))
+    server
+        .run()
+        .await
+        .map_err(|e| anyhow!("Failed to run server: {}", e))
 }
 
 async fn heartbeat() {
@@ -77,11 +110,11 @@ async fn heartbeat() {
     }
 }
 
-async fn send_or_drop(sessions: &mut Vec<Session>, msg: &str) {
+async fn send_or_drop(clients: &mut Vec<Client>, msg: &str) {
     let mut do_retain = Vec::new();
 
-    for session in sessions.iter_mut() {
-        match timeout(Duration::from_millis(500), session.text(msg)).await {
+    for client in clients.iter_mut() {
+        match timeout(Duration::from_millis(500), client.session.text(msg)).await {
             Ok(_) => {
                 do_retain.push(true);
             }
@@ -91,25 +124,31 @@ async fn send_or_drop(sessions: &mut Vec<Session>, msg: &str) {
             //     do_retain.push(false);
             // }
             Err(e) => {
-                info!("A client has timed out: {e}");
+                info!("'{}' has timed out: {e}", client.word);
                 do_retain.push(false);
             }
         }
     }
 
-    sessions.retain(|_| do_retain.pop().unwrap());
+    clients.retain(|_| do_retain.pop().unwrap());
 }
 
-// fn get_word(req: &HttpRequest) -> &'static str {
-//     let address = match req.headers().get("X-Forwarded-For") {
-//         Some(address) => address.to_str(),
-//         None => req.peer_addr().map::<[u8], _>(|a| match a.ip() {
-//             IpAddr::V4(ip) => ip.octets(),
-//             IpAddr::V6(ip) => ip.octets(),
-//         }).unwrap_or([0u8]),
-//     };
+fn get_word(req: &HttpRequest) -> &'static str {
+    let address = match req.headers().get("X-Forwarded-For") {
+        Some(address) => String::from(address.to_str().unwrap_or("")),
+        None => req
+            .peer_addr()
+            .map::<String, _>(|a| match a.ip() {
+                IpAddr::V4(ip) => ip.to_string(),
+                IpAddr::V6(ip) => ip.to_string(),
+            })
+            .unwrap_or("".to_string()),
+    };
 
-//     let mut seed = [0u8; 32];
+    let mut seed = DefaultHasher::new();
+    address.hash(&mut seed);
 
-//     WORDS.choose(&mut StdRng::from_seed(seed)).unwrap()
-// }
+    WORDS
+        .choose(&mut StdRng::seed_from_u64(seed.finish()))
+        .unwrap()
+}
