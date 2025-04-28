@@ -36,7 +36,7 @@ struct ServerArgs {
 struct ClientArgs {
     #[arg(long, default_value = "wss", help = "The protocol to use when connecting to the host")]
     protocol: String,
-    #[arg(short, long, help = "The host address")]
+    #[arg(short, long, default_value = "clickertrain.ing", help = "The host address")]
     addr: String,
     #[arg(short, long, default_value_t = 443, help = "The host port")]
     port: u16,
@@ -51,7 +51,7 @@ struct ClientArgs {
 struct ClickArgs {
     #[arg(long, default_value = "https", help = "The protocol to use when connecting to the host")]
     protocol: String,
-    #[arg(short, long, help = "The host address")]
+    #[arg(short, long, default_value = "clickertrain.ing", help = "The host address")]
     addr: String,
     #[arg(short, long, default_value_t = 443, help = "The host port")]
     port: u16,
