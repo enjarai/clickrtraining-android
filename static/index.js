@@ -2,7 +2,12 @@ let id = "";
 let ws;
 
 function changeInput(e) {
-    id = e.target.value;
+    updateInput(e.target);
+}
+
+function updateInput(t) {
+    id = t.value;
+    // localStorage.setItem("id", id);
     document.querySelectorAll(".id-button").forEach(el => {
         el.disabled = id.length <= 0;
     });
@@ -51,7 +56,13 @@ async function clickButton(e) {
     }, 1000);
 }
 
-document.querySelector("#id-input").value = "";
+const idInput = document.querySelector("#id-input");
+
+setInterval(() => {
+    updateInput(idInput);
+}, 500);
+
+// document.querySelector("#id-input").value = "";
 document.querySelectorAll(".id-button").forEach(el => {
     el.disabled = true;
 });

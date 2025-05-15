@@ -55,6 +55,29 @@ button:disabled {
 }
 
 #listen-info {
-    color: wheat;
     margin-top: 10px;
+    color: wheat;
+}
+
+#explanation ol li {
+    color: rgb(184, 158, 110);
+}
+
+#credits {
+    display: flex;
+    flex-direction: row;
+    color: wheat;
+}
+
+#credits div {
+    display: flex;
+    align-items: center;
+}
+
+img.button {
+    image-rendering: pixelated;
+}
+
+a {
+    color: rgb(219, 96, 219);
 }
