@@ -44,6 +44,8 @@ struct ClientArgs {
     id: String,
     #[arg(short, long, default_value_t = 1.0, help = "The volume at which to play the clicks")]
     volume: f32,
+    #[arg(short, long, default_value = "~/.config/clickrtraining/sounds/", help = "A directory holding custom sound files, all ending in .ogg")]
+    sounds_directory: String,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -57,6 +59,8 @@ struct ClickArgs {
     port: u16,
     #[arg(short, long, help = "The room identifier")]
     id: String,
+    #[arg(short, long, help = "A custom sound to play instead of clicking")]
+    sound: Option<String>,
 }
 
 #[actix_web::main]
@@ -71,7 +75,18 @@ async fn main() -> Result<()> {
         Command::Listen(args) => client::start(args).await,
         Command::Click(args) => {
             let client = awc::Client::default();
-            client.get(build_room_url(args.protocol.as_str(), args.addr.as_str(), args.port, args.id.as_str(), "click"))
+
+            let mut url = build_room_url(args.protocol.as_str(), args.addr.as_str(), args.port, args.id.as_str());
+            match args.sound {
+                Some(sound) => url
+                    .add_route("custom")
+                    .add_route(&sound.replace("/", "_")),
+                None => url.add_route("click"),
+            };
+
+            println!("{:?}", url);
+
+            client.get(url.build())
                 .send()
                 .await
                 .map(|_e| ())
@@ -80,7 +95,7 @@ async fn main() -> Result<()> {
     }
 }
 
-fn build_room_url(protocol: &str, address: &str, port: u16, room_id: &str, action: &str) -> String {
+fn build_room_url(protocol: &str, address: &str, port: u16, room_id: &str) -> URLBuilder {
     let mut ub = URLBuilder::new();
 
     ub
@@ -88,8 +103,7 @@ fn build_room_url(protocol: &str, address: &str, port: u16, room_id: &str, actio
         .set_host(address)
         .set_port(port)
         .add_route("api")
-        .add_route(room_id)
-        .add_route(action);
-
-    ub.build()
+        .add_route(room_id);
+    
+    ub
 }

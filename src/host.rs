@@ -77,6 +77,32 @@ async fn click(req: HttpRequest, id: web::Path<String>) -> impl Responder {
     }
 }
 
+#[get("/api/{id}/custom/{name}")]
+async fn custom_sound(
+    req: HttpRequest,
+    path: web::Path<(String, String)>
+) -> impl Responder {
+    if path.0.len() > 64 || path.1.len() > 64 {
+        return HttpResponse::BadRequest().finish();
+    }
+
+    if let Some(sessions) = CLIENTS.lock().await.get_mut(&path.0.to_string()) {
+        let sound = format!("s/{}", path.1.replace("/", "_"));
+        send_or_drop(sessions, &sound).await;
+
+        info!(
+            "'{}' triggered custom sound '{}' in room '{}'",
+            get_word(&req),
+            path.1,
+            path.0,
+        );
+
+        HttpResponse::Ok().finish()
+    } else {
+        HttpResponse::NotFound().finish()
+    }
+}
+
 pub async fn start(args: ServerArgs) -> Result<()> {
     spawn(heartbeat());
 
@@ -84,6 +110,7 @@ pub async fn start(args: ServerArgs) -> Result<()> {
         App::new()
             .service(listen)
             .service(click)
+            .service(custom_sound)
             .service(Files::new("/", "./static").index_file("index.html"))
     })
     .bind((args.addr, args.port))
