@@ -4,8 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background_color"
     tools:context=".MainActivity"
     tools:ignore="HardcodedText">
+
 
     <EditText
         android:id="@+id/idText"
@@ -14,6 +16,10 @@
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:hint="Id"
+        android:background="@drawable/edittext_background"
+        android:padding="12dp"
+        android:textColor="@color/black"
+        android:textColorHint="#262626"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
@@ -22,27 +28,25 @@
 
     <Button
         android:id="@+id/clickButton"
-        style="@style/Widget.AppCompat.Button.Borderless"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
         android:layout_marginEnd="64dp"
-        android:backgroundTint="@color/green_500"
+        android:background="@drawable/button_background"
         android:text="Click"
-        android:textColor="@color/teal_700"
+        android:textColor="@color/black"
         app:layout_constraintEnd_toEndOf="@+id/idText"
         app:layout_constraintTop_toBottomOf="@+id/idText" />
 
     <Button
         android:id="@+id/listenButton"
-        style="@style/Widget.AppCompat.Button.Borderless"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="64dp"
         android:layout_marginTop="32dp"
-        android:backgroundTint="@color/green_500"
+        android:background="@drawable/button_background"
         android:text="Listen"
-        android:textColor="@color/teal_700"
+        android:textColor="@color/black"
         app:layout_constraintStart_toStartOf="@+id/idText"
         app:layout_constraintTop_toBottomOf="@+id/idText" />
 
