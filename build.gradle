@@ -34,6 +34,16 @@ android {
     buildFeatures {
         compose true
     }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            if (variant.buildType.name == "release") {
+                outputFileName = "clickrtraining-release.apk"
+            } else if (variant.buildType.name == "debug") {
+                outputFileName = "clickrtraining-debug.apk"
+            }
+        }
+    }
 }
 
 dependencies {
