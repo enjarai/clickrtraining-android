@@ -82,24 +82,17 @@ class WebSocketService : Service() {
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
                 Log.d("WebSocketService", "Connected")
-            }
 
-            override fun onMessage(ws: WebSocket, text: String) {
-                if (text.contains("c")) {
-                    mediaPlayer.start()
-                }
-            }
+                // Save listening state in SharedPreferences
+                val prefs = getSharedPreferences("clicker_prefs", MODE_PRIVATE)
+                prefs.edit()
+                    .putBoolean("is_listening", true)
+                    .putString("saved_id", id)
+                    .apply()
 
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.e("WebSocketService", "Failure", t)
-                stopForeground(true)
-                stopSelf()
-            }
-
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                Log.d("WebSocketService", "Closed: $reason")
-                stopForeground(true)
-                stopSelf()
+                // Broadcast that listening has started
+                val intent = Intent("dev.chocobo.clickertraining.ACTION_STARTED")
+                sendBroadcast(intent)
             }
         })
     }
@@ -110,6 +103,12 @@ class WebSocketService : Service() {
         mediaPlayer.stop()
         mediaPlayer.reset()
         notifyActivityStopped()
+
+        // Clear listening state from SharedPreferences
+        val prefs = getSharedPreferences("clicker_prefs", MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean("is_listening", false)
+            .apply()
     }
 
     private fun notifyActivityStopped() {
@@ -129,13 +128,14 @@ class WebSocketService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Listening for a click")
             .setContentText("WebSocket is active")
-            .setSmallIcon(R.drawable.ic_notification)  // Use your notification icon here
             .addAction(
-                android.R.drawable.ic_delete,  // Icon for stop button (provide this drawable)
+                android.R.drawable.ic_delete,
                 "Stop Listening",
                 stopPendingIntent
             )
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSmallIcon(R.drawable.ic_notification)
             .build()
     }
 
