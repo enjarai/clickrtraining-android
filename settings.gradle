@@ -20,4 +20,3 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Clickertraining"
-include ':app'
